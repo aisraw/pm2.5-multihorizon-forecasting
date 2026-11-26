@@ -23,3 +23,13 @@ def fit_xgb(X_tr, y_tr, X_va, y_va, seed=42):
     )
     m.fit(X_tr, y_tr, eval_set=[(X_va, y_va)], verbose=False)
     return m
+def persistence_predict(df, lookback=24, horizon=1):
+    """Naive baseline: prediction = last observed pm25 (t)."""
+    preds, truth = [], []
+    for _, g in df.groupby("station"):
+        g = g.sort_values("timestamp")
+        t = g["pm25"].values
+        for i in range(lookback, len(g) - horizon + 1):
+            preds.append(t[i - 1])
+            truth.append(t[i - 1 + horizon])
+    return np.array(preds), np.array(truth)
