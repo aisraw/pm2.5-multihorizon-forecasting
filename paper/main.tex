@@ -1,0 +1,166 @@
+\documentclass[conference]{IEEEtran}
+\usepackage{cite}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{url}
+
+\begin{document}
+
+\title{Multi-Horizon PM2.5 Forecasting in Bangladesh: A Comparative Study of Machine Learning and Deep Learning Models}
+
+\author{\IEEEauthorblockN{Adita Mutsuddi}
+\IEEEauthorblockA{Dept. of CSE\\
+International Islamic University Chittagong\\
+Chittagong, Bangladesh\\
+c241432@ugrad.iiuc.ac.bd}
+\and
+\IEEEauthorblockN{Afia Tasnim Anisa}
+\IEEEauthorblockA{Dept. of CSE\\
+International Islamic University Chittagong\\
+Chittagong, Bangladesh\\
+c241446@ugrad.iiuc.ac.bd}
+\and
+\IEEEauthorblockN{Warisa Ahmed}
+\IEEEauthorblockA{Dept. of CSE\\
+International Islamic University Chittagong\\
+Chittagong, Bangladesh\\
+c241449@ugrad.iiuc.ac.bd}}
+
+\maketitle
+
+\begin{abstract}
+Fine particulate matter (PM2.5) is a major public health risk in Bangladesh, and reliable multi-hour forecasts are needed for early warning. This study compares machine learning and deep learning models for PM2.5 forecasting at 1-hour, 3-hour, and 6-hour horizons using hourly data from six monitoring stations, including Chittagong, covering August 2022 to July 2026. We evaluate XGBoost, LSTM, LSTM with self-attention, LSTM with a Transformer encoder, and a persistence baseline under a chronological split with 2026 as a held-out test year. Each deep model is trained with three random seeds and reported as mean and standard deviation. XGBoost gives the lowest error at all three horizons (MAE 2.68, 6.42, and 9.24 $\mu$g/m$^3$ at 1, 3, and 6 hours). At 3 and 6 hours, the LSTM with Transformer encoder has a lower mean MAE than the plain LSTM, but its variance across seeds overlaps with the LSTM at 6 hours. At 1 hour, the persistence baseline is more accurate than all deep models. These results indicate that, on this dataset, lag-based gradient boosting is a strong and stable choice, and deep models need further tuning and input scaling before their advantage can be assessed.
+\end{abstract}
+
+\begin{IEEEkeywords}
+PM2.5 forecasting, air quality, multi-horizon time series, XGBoost, LSTM, Transformer, attention, Bangladesh
+\end{IEEEkeywords}
+
+\section{Introduction}
+Air pollution is one of the leading environmental risks to health, and fine particulate matter (PM2.5) is especially harmful because it penetrates deep into the respiratory system. Bangladesh has some of the highest urban PM2.5 levels in the world, and cities such as Dhaka and Chittagong regularly exceed national and WHO guideline values~\cite{shahriar2021}. Accurate short-term forecasts support early warning, traffic and construction control, and public health advisories.
+
+Forecast skill usually decreases as the horizon grows, and a model that is best at one horizon is not always best at another. Classical approaches such as ARIMA and its hybrids with neural networks or support vector machines have been applied to Bangladeshi PM2.5 data~\cite{shahriar2021}. More recent studies apply deep learning, including attention-based and hybrid BiLSTM models, mostly for a single city or a single horizon~\cite{ahmed2026}. Such studies differ in data, horizon, and evaluation protocol, so their results are hard to compare directly.
+
+This study makes the following contributions:
+\begin{enumerate}
+    \item We build a common pipeline for six Bangladeshi stations, including Chittagong, with a chronological split and a 2026 hold-out year.
+    \item We compare XGBoost, LSTM, LSTM+Attention, LSTM+Transformer, and a persistence baseline at 1-, 3-, and 6-hour horizons.
+    \item We report mean and standard deviation over three random seeds, instead of a single run.
+    \item We document a failed first attention design and the change that fixed it, so readers can see the effect of the design choice.
+\end{enumerate}
+
+\section{Related Work}
+\subsection{Classical and Machine Learning Models}
+ARIMA-based hybrids were the standard approach for Bangladeshi PM2.5 forecasting. Shahriar et al.\ compared ARIMA-ANN, ARIMA-SVM, decision trees, and CatBoost on daily data from Dhaka, Narayanganj, and Gazipur, and reported gradient boosting as the strongest model~\cite{shahriar2021}. Gradient-boosted trees, and XGBoost in particular, are widely used for tabular lag features because they handle non-linear interactions with little tuning~\cite{chen2016}.
+
+\subsection{Deep Learning and Attention Models}
+LSTM networks model long-range temporal dependence in sequences~\cite{hochreiter1997}. Attention mechanisms weight time steps by relevance~\cite{bahdanau2015}, and Transformer encoders model dependencies across the whole sequence using multi-head self-attention~\cite{vaswani2017}. Hybrid designs that combine recurrent and attention layers have been reported for PM2.5 forecasting, often on a single horizon and a single dataset~\cite{ahmed2026}.
+
+\subsection{Gap}
+Few Bangladeshi studies compare classical and deep models at several horizons on a common split, with repeated runs, and with a leakage-free test year. This study addresses that gap for six stations.
+
+\section{Methodology}
+\subsection{Dataset}
+We use the hourly multi-station dataset \texttt{archive\_\_1\_}, which contains six stations (Dhaka, Chittagong, Sylhet, Rajshahi, Khulna, and Barisal) and 208,368 hourly records from 4 August 2022 to 20 July 2026. Each record includes PM2.5, PM10, SO$_2$, NO$_2$, CO, O$_3$, air temperature (TEMP), dew point (DEWP), surface pressure (PRES), rainfall (RAIN), wind speed (WSPM), and wind direction (wd). The source and original sampling procedure of this file were not independently verified, and every station has exactly 34,728 hourly rows with no missing PM2.5 values. This completeness is unusual for field monitoring, so the data source should be confirmed before the results are used for policy.
+
+\subsection{Preprocessing and Feature Construction}
+Records are sorted by station and timestamp, and each station is processed separately. Relative humidity is derived from air temperature and dew point using the Magnus formula:
+\begin{equation}
+\mathrm{RH} = 100\,\frac{\exp\!\left(\frac{17.625\,T_d}{243.04+T_d}\right)}{\exp\!\left(\frac{17.625\,T}{243.04+T}\right)}
+\end{equation}
+where $T$ is air temperature and $T_d$ is dew point in $^\circ$C. Wind direction is converted from compass labels to degrees and then encoded as $\sin$ and $\cos$ components so that $0^\circ$ and $360^\circ$ are close in feature space. The final feature set has eight variables: PM2.5, TEMP, RH, RAIN, WSPM, PRES, $\sin(\mathrm{wd})$, and $\cos(\mathrm{wd})$.
+
+Forecasting is framed as supervised learning. A window of the previous $L=24$ hourly observations is used to predict PM2.5 at $t+h$, where $h \in \{1,3,6\}$:
+\begin{equation}
+\hat{y}_{t+h} = f\!\left(\mathbf{X}_{t-L+1:t}\right), \qquad L = 24
+\end{equation}
+Windows never cross station boundaries.
+
+\subsection{Chronological Split}
+To avoid leakage from future data, the split is chronological and not random. Training uses all records before 1 January 2025, validation uses calendar year 2025, and testing uses 1 January 2026 to 20 July 2026. The resulting window counts are 126,720 (train), 52,416 (validation), and 28,800 (test).
+
+\subsection{Models}
+\textbf{Persistence} uses the last observed value as the forecast, $\hat{y}_{t+h}=y_t$. It is a naive reference that any learned model should beat.
+
+\textbf{XGBoost} regresses the flattened window ($24\times 8 = 192$ features) with gradient-boosted trees. The configuration is 500 trees, learning rate 0.05, maximum depth 6, row and column subsampling 0.8, and early stopping after 30 rounds on validation error~\cite{chen2016}.
+
+\textbf{LSTM} uses one LSTM layer with 64 units, dropout 0.2, a dense layer of 32 ReLU units, and a linear output.
+
+\textbf{LSTM+Attention} uses an LSTM with 64 units that returns the full sequence. Attention scores are computed with a tanh hidden layer followed by a linear projection and a softmax over time steps:
+\begin{equation}
+e_t = \mathbf{v}^\top \tanh(\mathbf{W}\mathbf{h}_t + \mathbf{b}), \qquad \alpha_t = \frac{\exp(e_t)}{\sum_{j=1}^{L}\exp(e_j)}, \qquad \mathbf{c} = \sum_{t=1}^{L}\alpha_t\,\mathbf{h}_t
+\end{equation}
+where $\mathbf{h}_t$ is the LSTM hidden state at time $t$. The context vector $\mathbf{c}$ is concatenated with the last hidden state $\mathbf{h}_L$ before the dense layers. The last-state concatenation is a residual path that keeps the model at least as expressive as the plain LSTM.
+
+\textbf{LSTM+Transformer} passes the LSTM sequence output through one Transformer encoder block with four attention heads, a feed-forward width of 128, residual connections, and layer normalization. Multi-head self-attention is defined as
+\begin{equation}
+\mathrm{MHA}(\mathbf{X}) = \mathrm{Concat}(\mathrm{head}_1,\dots,\mathrm{head}_4)\,\mathbf{W}^O, \qquad \mathrm{head}_i = \mathrm{softmax}\!\left(\frac{\mathbf{Q}_i\mathbf{K}_i^\top}{\sqrt{d_k}}\right)\mathbf{V}_i
+\end{equation}
+Global average pooling over time is followed by the same dense head as the other deep models.
+
+\subsection{Training Configuration}
+Deep models are trained with the Adam optimizer, learning rate $3\times 10^{-4}$, gradient norm clipping at 1.0, Huber loss, batch size 256, up to 40 epochs, and early stopping with patience 6 that restores the best validation weights. Each deep model is trained with seeds 42, 43, and 44. XGBoost is trained with the same three seeds. Persistence is deterministic.
+
+\subsection{Evaluation Metrics}
+We report mean absolute error (MAE), root mean squared error (RMSE), and the coefficient of determination ($R^2$) on the 2026 test set:
+\begin{align}
+\mathrm{MAE} &= \frac{1}{n}\sum_{i=1}^{n}\left|y_i-\hat{y}_i\right|\\
+\mathrm{RMSE} &= \sqrt{\frac{1}{n}\sum_{i=1}^{n}\left(y_i-\hat{y}_i\right)^2}\\
+R^2 &= 1-\frac{\sum_{i}(y_i-\hat{y}_i)^2}{\sum_{i}(y_i-\bar{y})^2}
+\end{align}
+All metrics are computed in $\mu$g/m$^3$.
+
+\section{Results and Discussion}
+\subsection{Model Comparison}
+Table~\ref{tab:main} reports mean $\pm$ standard deviation over three seeds for each model and horizon. XGBoost and persistence have zero or near-zero seed variance because they are deterministic or insensitive to the seed.
+
+\begin{table}[htbp]
+\caption{Test-set performance (2026) by horizon. Values are mean $\pm$ standard deviation over seeds 42, 43, and 44. Best MAE per horizon in bold.}
+\label{tab:main}
+\centering
+\begin{tabular}{llccc}
+\toprule
+$h$ & Model & MAE & RMSE & $R^2$ \\
+\midrule
+1\,h & XGBoost & \textbf{2.675 $\pm$ 0.003} & \textbf{4.830 $\pm$ 0.010} & \textbf{0.978 $\pm$ 0.000} \\
+ & LSTM & 4.396 $\pm$ 0.256 & 7.774 $\pm$ 1.009 & 0.943 $\pm$ 0.015 \\
+ & LSTM+Attn & 3.893 $\pm$ 0.231 & 6.994 $\pm$ 0.486 & 0.954 $\pm$ 0.006 \\
+ & LSTM+Transformer & 4.383 $\pm$ 1.236 & 7.056 $\pm$ 1.544 & 0.952 $\pm$ 0.021 \\
+ & Persistence & 3.788 & 6.425 & 0.961 \\
+\midrule
+3\,h & XGBoost & \textbf{6.415 $\pm$ 0.004} & \textbf{9.779 $\pm$ 0.010} & \textbf{0.910 $\pm$ 0.000} \\
+ & LSTM & 8.979 $\pm$ 0.174 & 14.016 $\pm$ 0.487 & 0.815 $\pm$ 0.013 \\
+ & LSTM+Attn & 7.900 $\pm$ 0.086 & 12.099 $\pm$ 0.171 & 0.862 $\pm$ 0.004 \\
+ & LSTM+Transformer & 8.277 $\pm$ 0.288 & 12.415 $\pm$ 0.255 & 0.855 $\pm$ 0.006 \\
+ & Persistence & 9.786 & 15.311 & 0.779 \\
+\midrule
+6\,h & XGBoost & \textbf{9.244 $\pm$ 0.018} & \textbf{13.521 $\pm$ 0.042} & \textbf{0.828 $\pm$ 0.001} \\
+ & LSTM & 13.134 $\pm$ 0.403 & 19.240 $\pm$ 0.722 & 0.651 $\pm$ 0.026 \\
+ & LSTM+Attn & 11.451 $\pm$ 1.127 & 16.607 $\pm$ 1.747 & 0.738 $\pm$ 0.055 \\
+ & LSTM+Transformer & 11.618 $\pm$ 1.646 & 16.565 $\pm$ 2.328 & 0.738 $\pm$ 0.075 \\
+ & Persistence & 15.818 & 23.426 & 0.482 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+XGBoost is the best model at every horizon on all three metrics, with very small seed variance. Its MAE rises from 2.68 at 1 hour to 9.24 at 6 hours, while the persistence baseline rises from 3.79 to 15.82. The gap between XGBoost and persistence widens with the horizon, which indicates that the learned model extracts information from weather and time features that persistence does not use.
+
+\subsection{Deep Models}
+Among deep models, LSTM+Attention is the most consistent at 3 hours (MAE $7.90\pm0.09$). At 3 and 6 hours, LSTM+Transformer has a lower mean MAE than plain LSTM ($8.28$ vs.\ $8.98$; $11.62$ vs.\ $13.13$), but at 6 hours the seed variance is large and the two ranges overlap, so the advantage is not established with three seeds. At 1 hour, all deep models are less accurate than persistence, which suggests that the deep models have not yet learned the short-term dependence that a naive forecast captures.
+
+\subsection{Limitations}
+Several limitations affect how far these results should be read. First, the deep-model inputs are not scaled. Features range from about $-1$ to $1$ for the wind-direction encodings to about 1000 for pressure, and the target ranges from 0 to over 700 $\mu$g/m$^3$. Min-max scaling fitted on the training set is standard for neural networks and may change the deep-model results, so the current deep-model numbers should be treated as a preliminary benchmark. Second, the hyperparameters for the deep models were chosen by a small number of checks and not by a full search. Third, the dataset source and completeness must be confirmed. Fourth, only three seeds are used, which is enough to show variance but not enough for a formal significance test.
+
+\section{Conclusion and Future Work}
+We compared five forecasting models for PM2.5 at 1-, 3-, and 6-hour horizons across six Bangladeshi stations, using a chronological split with a 2026 hold-out year and three random seeds. XGBoost gave the lowest error at all horizons and was the most stable across seeds. LSTM+Transformer improved mean error over plain LSTM at 3 and 6 hours, but the improvement is not clearly larger than seed variation at 6 hours. Persistence was more accurate than all deep models at 1 hour.
+
+Future work will apply Min-max scaling fitted on training data, extend the seed count to five or more, add SHAP-based feature attribution for XGBoost, run a Diebold--Mariano test between the leading models, and verify the dataset against its original monitoring source.
+
+\section*{Declaration on AI Use}
+[State here which AI tools were used, for what purpose (for example, grammar editing or debugging), and confirm that the research design, analysis, and conclusions were written by the authors.]
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}
