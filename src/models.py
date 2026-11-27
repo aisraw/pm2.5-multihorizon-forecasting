@@ -51,18 +51,22 @@ def build_lstm(lookback, n_feat, units=64, dropout=0.2):
     return Model(inp, layers.Dense(1)(x), name="lstm")
 
 
-def _attn_pool(seq):
-    # time step er upor attention weight, weighted sum
-    score = layers.Dense(1)(seq)                      # (B, L, 1)
-    w = layers.Softmax(axis=1)(score)                 # (B, L, 1)
-    ctx = layers.Multiply()([seq, w])                 # (B, L, U)
+def _attn_pool(seq, units=32):
+    # Fix 2: tanh hidden layer diye attention score shikhbe
+    score = layers.Dense(units, activation="tanh")(seq)
+    score = layers.Dense(1)(score)                     # (B, L, 1)
+    w = layers.Softmax(axis=1)(score)                  # time step er upor softmax
+    ctx = layers.Multiply()([seq, w])
     return layers.Lambda(lambda t: tf.reduce_sum(t, axis=1))(ctx)
 
 
 def build_lstm_attn(lookback, n_feat, units=64, dropout=0.2):
     inp = layers.Input(shape=(lookback, n_feat))
     seq = layers.LSTM(units, return_sequences=True)(inp)
-    x = _attn_pool(seq)
+    ctx = _attn_pool(seq)
+    # Fix 4: last hidden state er sathe attention context concat
+    last = layers.Lambda(lambda t: t[:, -1, :])(seq)
+    x = layers.Concatenate()([ctx, last])
     x = layers.Dropout(dropout)(x)
     x = layers.Dense(32, activation="relu")(x)
     return Model(inp, layers.Dense(1)(x), name="lstm_attn")
@@ -80,8 +84,8 @@ def _encoder_block(x, d, heads, ff, dropout):
 def build_lstm_transformer(lookback, n_feat, units=64, heads=4,
                            n_blocks=1, dropout=0.2):
     inp = layers.Input(shape=(lookback, n_feat))
-    x = layers.LSTM(units, return_sequences=True)(inp)   # local temporal pattern
-    for _ in range(n_blocks):                            # global dependency
+    x = layers.LSTM(units, return_sequences=True)(inp)
+    for _ in range(n_blocks):
         x = _encoder_block(x, units, heads, 2 * units, dropout)
     x = layers.GlobalAveragePooling1D()(x)
     x = layers.Dropout(dropout)(x)
@@ -89,10 +93,12 @@ def build_lstm_transformer(lookback, n_feat, units=64, heads=4,
     return Model(inp, layers.Dense(1)(x), name="lstm_transformer")
 
 
-def fit_net(model, X_tr, y_tr, X_va, y_va, epochs=40, batch_size=256, seed=42):
+def fit_net(model, X_tr, y_tr, X_va, y_va, epochs=40, batch_size=256,
+            seed=42, lr=3e-4, clip=1.0):
     tf.random.set_seed(seed)
     np.random.seed(seed)
-    model.compile(optimizer=tf.keras.optimizers.Adam(1e-3), loss="mse")
+    opt = tf.keras.optimizers.Adam(learning_rate=lr, clipnorm=clip)
+    model.compile(optimizer=opt, loss="huber")
     model.fit(X_tr, y_tr, validation_data=(X_va, y_va),
               epochs=epochs, batch_size=batch_size, verbose=0,
               callbacks=[EarlyStopping(patience=6, restore_best_weights=True)])
