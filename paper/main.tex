@@ -9,23 +9,9 @@
 
 \title{Multi-Horizon PM2.5 Forecasting in Bangladesh: A Comparative Study of Machine Learning and Deep Learning Models}
 
-\author{\IEEEauthorblockN{Adita Mutsuddi}
-\IEEEauthorblockA{Dept. of CSE\\
-International Islamic University Chittagong\\
-Chittagong, Bangladesh\\
-c241432@ugrad.iiuc.ac.bd}
-\and
-\IEEEauthorblockN{Afia Tasnim Anisa}
-\IEEEauthorblockA{Dept. of CSE\\
-International Islamic University Chittagong\\
-Chittagong, Bangladesh\\
-c241446@ugrad.iiuc.ac.bd}
-\and
-\IEEEauthorblockN{Warisa Ahmed}
-\IEEEauthorblockA{Dept. of CSE\\
-International Islamic University Chittagong\\
-Chittagong, Bangladesh\\
-c241449@ugrad.iiuc.ac.bd}}
+\author{\IEEEauthorblockN{Adita Mutsuddi, Afia Tasnim Anisa, and Warisa Ahmed}
+\IEEEauthorblockA{Dept. of CSE, International Islamic University Chittagong, Chittagong, Bangladesh\\
+c241432@ugrad.iiuc.ac.bd, c241446@ugrad.iiuc.ac.bd, c241449@ugrad.iiuc.ac.bd}}
 
 \maketitle
 
@@ -38,9 +24,9 @@ PM2.5 forecasting, air quality, multi-horizon time series, XGBoost, LSTM, Transf
 \end{IEEEkeywords}
 
 \section{Introduction}
-Air pollution is one of the leading environmental risks to health, and fine particulate matter (PM2.5) is especially harmful because it penetrates deep into the respiratory system. Bangladesh has some of the highest urban PM2.5 levels in the world, and cities such as Dhaka and Chittagong regularly exceed national and WHO guideline values~\cite{shahriar2021}. Accurate short-term forecasts support early warning, traffic and construction control, and public health advisories.
+Air pollution is one of the leading environmental risks to health, and fine particulate matter (PM2.5) is especially harmful because it penetrates deep into the respiratory system. Bangladesh has some of the highest urban PM2.5 levels in the world, and cities such as Dhaka and Chittagong regularly exceed national and WHO guideline values~\cite{shahriar2021}. Exposure also affects maternal outcomes~\cite{nayeem2026}, and the long-term mental-health burden of ambient PM2.5 is increasingly quantified~\cite{siddik2026}. Accurate short-term forecasts support early warning, traffic and construction control, and public health advisories.
 
-Forecast skill usually decreases as the horizon grows, and a model that is best at one horizon is not always best at another. Classical approaches such as ARIMA and its hybrids with neural networks or support vector machines have been applied to Bangladeshi PM2.5 data~\cite{shahriar2021}. More recent studies apply deep learning, including attention-based and hybrid BiLSTM models, mostly for a single city or a single horizon~\cite{ahmed2026}. Such studies differ in data, horizon, and evaluation protocol, so their results are hard to compare directly.
+Forecast skill usually decreases as the horizon grows~\cite{zeng2026}, and a model that is best at one horizon is not always best at another. Classical approaches such as ARIMA and its hybrids with neural networks or support vector machines have been applied to Bangladeshi PM2.5 data~\cite{shahriar2021}. More recent studies apply deep learning, including attention-based and hybrid BiLSTM models~\cite{ahmed2026,islam2025,nobin2026,lisun2023}, mostly for a single city or a single horizon. Such studies differ in data, horizon, and evaluation protocol, so their results are hard to compare directly.
 
 This study makes the following contributions:
 \begin{enumerate}
@@ -52,10 +38,10 @@ This study makes the following contributions:
 
 \section{Related Work}
 \subsection{Classical and Machine Learning Models}
-ARIMA-based hybrids were the standard approach for Bangladeshi PM2.5 forecasting. Shahriar et al.\ compared ARIMA-ANN, ARIMA-SVM, decision trees, and CatBoost on daily data from Dhaka, Narayanganj, and Gazipur, and reported gradient boosting as the strongest model~\cite{shahriar2021}. Gradient-boosted trees, and XGBoost in particular, are widely used for tabular lag features because they handle non-linear interactions with little tuning~\cite{chen2016}.
+ARIMA-based hybrids were the standard approach for Bangladeshi PM2.5 forecasting. Shahriar et al.\ compared ARIMA-ANN, ARIMA-SVM, decision trees, and CatBoost on daily data from Dhaka, Narayanganj, and Gazipur, and reported gradient boosting as the strongest model~\cite{shahriar2021}. Gradient-boosted trees, and XGBoost in particular, are widely used for tabular lag features because they handle non-linear interactions with little tuning~\cite{chen2016}. Hybrid machine learning models that combine statistical and neural components have also been applied to air quality forecasting~\cite{mehregan,jesupriya,anggraini}.
 
 \subsection{Deep Learning and Attention Models}
-LSTM networks model long-range temporal dependence in sequences~\cite{hochreiter1997}. Attention mechanisms weight time steps by relevance~\cite{bahdanau2015}, and Transformer encoders model dependencies across the whole sequence using multi-head self-attention~\cite{vaswani2017}. Hybrid designs that combine recurrent and attention layers have been reported for PM2.5 forecasting, often on a single horizon and a single dataset~\cite{ahmed2026}.
+LSTM networks model long-range temporal dependence in sequences~\cite{hochreiter1997}. Attention mechanisms weight time steps by relevance~\cite{bahdanau2015}, and Transformer encoders model dependencies across the whole sequence using multi-head self-attention~\cite{vaswani2017}. Transformer-LSTM hybrids have been proposed for air quality~\cite{liu2025} and for other weather-driven forecasting tasks~\cite{das}. Hybrid designs that combine recurrent and attention layers have been reported for PM2.5 forecasting, often on a single horizon and a single dataset~\cite{ahmed2026}. Spatial graph models extend this idea to multiple cities~\cite{nobin2026}, and the relative ranking of models depends on the horizon~\cite{zeng2026}.
 
 \subsection{Gap}
 Few Bangladeshi studies compare classical and deep models at several horizons on a common split, with repeated runs, and with a leakage-free test year. This study addresses that gap for six stations.
@@ -78,22 +64,22 @@ Forecasting is framed as supervised learning. A window of the previous $L=24$ ho
 Windows never cross station boundaries.
 
 \subsection{Chronological Split}
-To avoid leakage from future data, the split is chronological and not random. Training uses all records before 1 January 2025, validation uses calendar year 2025, and testing uses 1 January 2026 to 20 July 2026. The resulting window counts are 126,720 (train), 52,416 (validation), and 28,800 (test).
+To avoid leakage from future data, the split is chronological and not random. Random cross-validation can give optimistic estimates for temporally structured data~\cite{marfath2026}, so a temporal hold-out is used. Training uses all records before 1 January 2025, validation uses calendar year 2025, and testing uses 1 January 2026 to 20 July 2026. The resulting window counts are 126,720 (train), 52,416 (validation), and 28,800 (test).
 
 \subsection{Models}
 \textbf{Persistence} uses the last observed value as the forecast, $\hat{y}_{t+h}=y_t$. It is a naive reference that any learned model should beat.
 
-\textbf{XGBoost} regresses the flattened window ($24\times 8 = 192$ features) with gradient-boosted trees. The configuration is 500 trees, learning rate 0.05, maximum depth 6, row and column subsampling 0.8, and early stopping after 30 rounds on validation error~\cite{chen2016}.
+\textbf{XGBoost}~\cite{chen2016} regresses the flattened window ($24\times 8 = 192$ features) with gradient-boosted trees. The configuration is 500 trees, learning rate 0.05, maximum depth 6, row and column subsampling 0.8, and early stopping after 30 rounds on validation error.
 
-\textbf{LSTM} uses one LSTM layer with 64 units, dropout 0.2, a dense layer of 32 ReLU units, and a linear output.
+\textbf{LSTM}~\cite{hochreiter1997} uses one LSTM layer with 64 units, dropout 0.2, a dense layer of 32 ReLU units, and a linear output.
 
-\textbf{LSTM+Attention} uses an LSTM with 64 units that returns the full sequence. Attention scores are computed with a tanh hidden layer followed by a linear projection and a softmax over time steps:
+\textbf{LSTM+Attention} uses an LSTM with 64 units that returns the full sequence. Attention scores are computed with a tanh hidden layer followed by a linear projection and a softmax over time steps~\cite{bahdanau2015}:
 \begin{equation}
 e_t = \mathbf{v}^\top \tanh(\mathbf{W}\mathbf{h}_t + \mathbf{b}), \qquad \alpha_t = \frac{\exp(e_t)}{\sum_{j=1}^{L}\exp(e_j)}, \qquad \mathbf{c} = \sum_{t=1}^{L}\alpha_t\,\mathbf{h}_t
 \end{equation}
 where $\mathbf{h}_t$ is the LSTM hidden state at time $t$. The context vector $\mathbf{c}$ is concatenated with the last hidden state $\mathbf{h}_L$ before the dense layers. The last-state concatenation is a residual path that keeps the model at least as expressive as the plain LSTM.
 
-\textbf{LSTM+Transformer} passes the LSTM sequence output through one Transformer encoder block with four attention heads, a feed-forward width of 128, residual connections, and layer normalization. Multi-head self-attention is defined as
+\textbf{LSTM+Transformer} passes the LSTM sequence output through one Transformer encoder block with four attention heads, a feed-forward width of 128, residual connections, and layer normalization. Multi-head self-attention~\cite{vaswani2017} is defined as
 \begin{equation}
 \mathrm{MHA}(\mathbf{X}) = \mathrm{Concat}(\mathrm{head}_1,\dots,\mathrm{head}_4)\,\mathbf{W}^O, \qquad \mathrm{head}_i = \mathrm{softmax}\!\left(\frac{\mathbf{Q}_i\mathbf{K}_i^\top}{\sqrt{d_k}}\right)\mathbf{V}_i
 \end{equation}
